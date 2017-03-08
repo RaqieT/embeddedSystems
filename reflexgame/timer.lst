@@ -1,0 +1,575 @@
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 1
+
+
+   1              		.code	16
+   2              		.file	"timer.c"
+   3              		.section	.debug_abbrev,"",%progbits
+   4              	.Ldebug_abbrev0:
+   5              		.section	.debug_info,"",%progbits
+   6              	.Ldebug_info0:
+   7              		.section	.debug_line,"",%progbits
+   8              	.Ldebug_line0:
+   9 0000 70000000 		.text
+   9      02004800 
+   9      00000201 
+   9      FB0E0D00 
+   9      01010101 
+  10              	.Ltext0:
+  11              		.align	2
+  12              		.global	startTimer1
+  13              		.code 16
+  14              		.thumb_func
+  15              		.type	startTimer1, %function
+  16              	startTimer1:
+  17              	.LFB2:
+  18              		.file 1 "timer.c"
+   1:timer.c       **** //timer.c
+   2:timer.c       **** /******************************************************************************
+   3:timer.c       ****  *
+   4:timer.c       ****  * Copyright:
+   5:timer.c       ****  *    (C) 2000 - 2005 Embedded Artists AB
+   6:timer.c       ****  *
+   7:timer.c       ****  *****************************************************************************/
+   8:timer.c       **** 
+   9:timer.c       **** 
+  10:timer.c       **** #include "../pre_emptive_os/api/osapi.h"
+  11:timer.c       **** #include "../pre_emptive_os/api/general.h"
+  12:timer.c       **** #include <printf_P.h>
+  13:timer.c       **** #include <lpc2xxx.h>
+  14:timer.c       **** #include <consol.h>
+  15:timer.c       **** #include <config.h>
+  16:timer.c       **** 
+  17:timer.c       **** 
+  18:timer.c       **** /******************************************************************************
+  19:timer.c       ****  * Defines and typedefs
+  20:timer.c       ****  *****************************************************************************/
+  21:timer.c       **** #define CRYSTAL_FREQUENCY FOSC
+  22:timer.c       **** #define PLL_FACTOR        PLL_MUL
+  23:timer.c       **** #define VPBDIV_FACTOR     PBSD
+  24:timer.c       **** 
+  25:timer.c       **** #define  SPI_CS   0x00008000  //<= new board, old board = 0x00800000
+  26:timer.c       **** void ledMatrix(void);
+  27:timer.c       **** int getAnyButton();
+  28:timer.c       **** tU32 timer=0;
+  29:timer.c       **** 
+  30:timer.c       **** void startTimer1(void)
+  31:timer.c       **** {
+  19              		.loc 1 31 0
+  32:timer.c       ****   //initialize VIC for Timer1 interrupts
+  33:timer.c       ****   VICIntSelect &= ~0x20;           //Timer1 interrupt is assigned to IRQ (not FIQ)
+  20              		.loc 1 33 0
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 2
+
+
+  21 0000 104A     		ldr	r2, .L3
+  22 0002 1368     		ldr	r3, [r2]
+  23 0004 2021     		mov	r1, #32
+  24 0006 8B43     		bic	r3, r3, r1
+  25 0008 1360     		str	r3, [r2]
+  34:timer.c       ****   VICVectAddr5  = (tU32)ledMatrix; //register ISR address
+  26              		.loc 1 34 0
+  27 000a 0F4A     		ldr	r2, .L3+4
+  28 000c 0F4B     		ldr	r3, .L3+8
+  29 000e 1A60     		str	r2, [r3]
+  35:timer.c       ****   VICVectCntl5  = 0x25;            //enable vector interrupt for timer1
+  30              		.loc 1 35 0
+  31 0010 0F4B     		ldr	r3, .L3+12
+  32 0012 2522     		mov	r2, #37
+  33 0014 1A60     		str	r2, [r3]
+  36:timer.c       ****   VICIntEnable  = 0x20;            //enable timer1 interrupt
+  34              		.loc 1 36 0
+  35 0016 0F4B     		ldr	r3, .L3+16
+  36 0018 1960     		str	r1, [r3]
+  37:timer.c       ****   
+  38:timer.c       ****   //initialize and start Timer #0
+  39:timer.c       ****   T1TCR = 0x00000002;                           //disable and reset Timer1
+  37              		.loc 1 39 0
+  38 001a 0F49     		ldr	r1, .L3+20
+  39 001c 0223     		mov	r3, #2
+  40 001e 0B60     		str	r3, [r1]
+  40:timer.c       ****   T1PR  = 0x0; 							//PR- WARTOSC DO KTOREJ DAZY PC, jedno przeskoczenie bitowe trwa 1/60 000 000
+  41              		.loc 1 40 0
+  42 0020 0E4B     		ldr	r3, .L3+24
+  43 0022 0022     		mov	r2, #0
+  44 0024 1A60     		str	r2, [r3]
+  41:timer.c       ****   T1PC  = 0x00000000;                           //PC- rozmiar oczekiwania pomiedzy skokami TC,
+  45              		.loc 1 41 0
+  46 0026 0433     		add	r3, r3, #4
+  47 0028 1A60     		str	r2, [r3]
+  42:timer.c       ****   T1MR0 = 2 *                           //calculate no of timer ticks
+  48              		.loc 1 42 0
+  49 002a 0D4A     		ldr	r2, .L3+28
+  50 002c 0833     		add	r3, r3, #8
+  51 002e 1A60     		str	r2, [r3]
+  43:timer.c       ****          ((CRYSTAL_FREQUENCY * PLL_FACTOR) / (1000 * VPBDIV_FACTOR));
+  44:timer.c       ****   T1IR  = 0x000000ff;                           //reset all flags before enable IRQs
+  52              		.loc 1 44 0
+  53 0030 FF22     		mov	r2, #255
+  54 0032 183B     		sub	r3, r3, #24
+  55 0034 1A60     		str	r2, [r3]
+  45:timer.c       ****   T1MCR = 0x00000003;                          //reset counter and generate IRQ on MR0 match
+  56              		.loc 1 45 0
+  57 0036 0322     		mov	r2, #3
+  58 0038 1433     		add	r3, r3, #20
+  59 003a 1A60     		str	r2, [r3]
+  46:timer.c       ****   T1TCR = 0x00000001;                           //start Timer1
+  60              		.loc 1 46 0
+  61 003c 0123     		mov	r3, #1
+  62              		.loc 1 31 0
+  63              		@ lr needed for prologue
+  64              		.loc 1 46 0
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 3
+
+
+  65 003e 0B60     		str	r3, [r1]
+  47:timer.c       **** }
+  66              		.loc 1 47 0
+  67              		@ sp needed for prologue
+  68 0040 7047     		bx	lr
+  69              	.L4:
+  70 0042 0000     		.align	2
+  71              	.L3:
+  72 0044 0CF0FFFF 		.word	-4084
+  73 0048 00000000 		.word	ledMatrix
+  74 004c 14F1FFFF 		.word	-3820
+  75 0050 14F2FFFF 		.word	-3564
+  76 0054 10F0FFFF 		.word	-4080
+  77 0058 048000E0 		.word	-536838140
+  78 005c 0C8000E0 		.word	-536838132
+  79 0060 C0D40100 		.word	120000
+  80              	.LFE2:
+  81              		.size	startTimer1, .-startTimer1
+  82              		.align	2
+  83              		.global	getSomeTime
+  84              		.code 16
+  85              		.thumb_func
+  86              		.type	getSomeTime, %function
+  87              	getSomeTime:
+  88              	.LFB3:
+  48:timer.c       **** 
+  49:timer.c       **** int getSomeTime(void)
+  50:timer.c       **** {
+  89              		.loc 1 50 0
+  90 0064 00B5     		push	{lr}
+  91              	.LCFI0:
+  51:timer.c       **** 	timer=0; //timer nullfier
+  92              		.loc 1 51 0
+  93 0066 074A     		ldr	r2, .L11
+  94 0068 0023     		mov	r3, #0
+  95 006a 1360     		str	r3, [r2]
+  96              	.L6:
+  52:timer.c       **** 	for(;;)
+  53:timer.c       **** 	{
+  54:timer.c       **** 		if (getAnyButton())//tu klik cokolwiek
+  97              		.loc 1 54 0
+  98 006c FFF7FEFF 		bl	getAnyButton
+  99 0070 0028     		cmp	r0, #0
+ 100 0072 03D1     		bne	.L10
+  55:timer.c       **** 		{
+  56:timer.c       **** 			return timer; //return time
+  57:timer.c       **** 		}
+  58:timer.c       **** 		osSleep(1);
+ 101              		.loc 1 58 0
+ 102 0074 0120     		mov	r0, #1
+ 103 0076 FFF7FEFF 		bl	osSleep
+ 104 007a F7E7     		b	.L6
+ 105              	.L10:
+ 106              		.loc 1 54 0
+ 107 007c 014B     		ldr	r3, .L11
+ 108 007e 1868     		ldr	r0, [r3]
+  59:timer.c       **** 	}
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 4
+
+
+  60:timer.c       **** }...
+ 109              		.loc 1 60 0
+ 110              		@ sp needed for prologue
+ 111 0080 02BC     		pop	{r1}
+ 112 0082 0847     		bx	r1
+ 113              	.L12:
+ 114              		.align	2
+ 115              	.L11:
+ 116 0084 00000000 		.word	timer
+ 117              	.LFE3:
+ 118              		.size	getSomeTime, .-getSomeTime
+ 119              		.global	timer
+ 120              		.bss
+ 121              		.align	2
+ 122              		.type	timer, %object
+ 123              		.size	timer, 4
+ 124              	timer:
+ 125 0000 00000000 		.space	4
+ 126              		.section	.debug_frame,"",%progbits
+ 127              	.Lframe0:
+ 128 0000 0C000000 		.4byte	.LECIE0-.LSCIE0
+ 129              	.LSCIE0:
+ 130 0004 FFFFFFFF 		.4byte	0xffffffff
+ 131 0008 01       		.byte	0x1
+ 132 0009 00       		.ascii	"\000"
+ 133 000a 01       		.uleb128 0x1
+ 134 000b 7C       		.sleb128 -4
+ 135 000c 0E       		.byte	0xe
+ 136 000d 0C       		.byte	0xc
+ 137 000e 0D       		.uleb128 0xd
+ 138 000f 00       		.uleb128 0x0
+ 139              		.align	2
+ 140              	.LECIE0:
+ 141              	.LSFDE0:
+ 142 0010 0C000000 		.4byte	.LEFDE0-.LASFDE0
+ 143              	.LASFDE0:
+ 144 0014 00000000 		.4byte	.Lframe0
+ 145 0018 00000000 		.4byte	.LFB2
+ 146 001c 64000000 		.4byte	.LFE2-.LFB2
+ 147              		.align	2
+ 148              	.LEFDE0:
+ 149              	.LSFDE2:
+ 150 0020 14000000 		.4byte	.LEFDE2-.LASFDE2
+ 151              	.LASFDE2:
+ 152 0024 00000000 		.4byte	.Lframe0
+ 153 0028 64000000 		.4byte	.LFB3
+ 154 002c 24000000 		.4byte	.LFE3-.LFB3
+ 155 0030 42       		.byte	0x4
+ 156              		.4byte	.LCFI0-.LFB3
+ 157 0031 0E       		.byte	0xe
+ 158 0032 04       		.uleb128 0x4
+ 159 0033 8E       		.byte	0x8e
+ 160 0034 01       		.uleb128 0x1
+ 161 0035 000000   		.align	2
+ 162              	.LEFDE2:
+ 163              		.file 2 "../pre_emptive_os/api/../api/general.h"
+ 164              		.text
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 5
+
+
+ 165              	.Letext0:
+ 166              		.section	.debug_loc,"",%progbits
+ 167              	.Ldebug_loc0:
+ 168              	.LLST1:
+ 169 0000 64000000 		.4byte	.LFB3-.Ltext0
+ 170 0004 66000000 		.4byte	.LCFI0-.Ltext0
+ 171 0008 0100     		.2byte	0x1
+ 172 000a 5D       		.byte	0x5d
+ 173 000b 66000000 		.4byte	.LCFI0-.Ltext0
+ 174 000f 88000000 		.4byte	.LFE3-.Ltext0
+ 175 0013 0200     		.2byte	0x2
+ 176 0015 7D       		.byte	0x7d
+ 177 0016 04       		.sleb128 4
+ 178 0017 00000000 		.4byte	0x0
+ 179 001b 00000000 		.4byte	0x0
+ 180              		.section	.debug_info
+ 181 0000 9C000000 		.4byte	0x9c
+ 182 0004 0200     		.2byte	0x2
+ 183 0006 00000000 		.4byte	.Ldebug_abbrev0
+ 184 000a 04       		.byte	0x4
+ 185 000b 01       		.uleb128 0x1
+ 186 000c 00000000 		.4byte	.Ldebug_line0
+ 187 0010 88000000 		.4byte	.Letext0
+ 188 0014 00000000 		.4byte	.Ltext0
+ 189 0018 9A000000 		.4byte	.LASF8
+ 190 001c 01       		.byte	0x1
+ 191 001d 0C000000 		.4byte	.LASF9
+ 192 0021 5A000000 		.4byte	.LASF10
+ 193 0025 02       		.uleb128 0x2
+ 194 0026 14000000 		.4byte	.LASF0
+ 195 002a 01       		.byte	0x1
+ 196 002b 08       		.byte	0x8
+ 197 002c 02       		.uleb128 0x2
+ 198 002d 3A000000 		.4byte	.LASF1
+ 199 0031 02       		.byte	0x2
+ 200 0032 07       		.byte	0x7
+ 201 0033 03       		.uleb128 0x3
+ 202 0034 A6000000 		.4byte	.LASF11
+ 203 0038 02       		.byte	0x2
+ 204 0039 49       		.byte	0x49
+ 205 003a 3E000000 		.4byte	0x3e
+ 206 003e 02       		.uleb128 0x2
+ 207 003f 4D000000 		.4byte	.LASF2
+ 208 0043 04       		.byte	0x4
+ 209 0044 07       		.byte	0x7
+ 210 0045 02       		.uleb128 0x2
+ 211 0046 C1000000 		.4byte	.LASF3
+ 212 004a 01       		.byte	0x1
+ 213 004b 06       		.byte	0x6
+ 214 004c 02       		.uleb128 0x2
+ 215 004d AB000000 		.4byte	.LASF4
+ 216 0051 02       		.byte	0x2
+ 217 0052 05       		.byte	0x5
+ 218 0053 04       		.uleb128 0x4
+ 219 0054 696E7400 		.ascii	"int\000"
+ 220 0058 04       		.byte	0x4
+ 221 0059 05       		.byte	0x5
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 6
+
+
+ 222 005a 02       		.uleb128 0x2
+ 223 005b 28000000 		.4byte	.LASF5
+ 224 005f 04       		.byte	0x4
+ 225 0060 07       		.byte	0x7
+ 226 0061 05       		.uleb128 0x5
+ 227 0062 01       		.byte	0x1
+ 228 0063 B5000000 		.4byte	.LASF6
+ 229 0067 01       		.byte	0x1
+ 230 0068 1F       		.byte	0x1f
+ 231 0069 01       		.byte	0x1
+ 232 006a 00000000 		.4byte	.LFB2
+ 233 006e 64000000 		.4byte	.LFE2
+ 234 0072 01       		.byte	0x1
+ 235 0073 5D       		.byte	0x5d
+ 236 0074 06       		.uleb128 0x6
+ 237 0075 01       		.byte	0x1
+ 238 0076 00000000 		.4byte	.LASF7
+ 239 007a 01       		.byte	0x1
+ 240 007b 32       		.byte	0x32
+ 241 007c 01       		.byte	0x1
+ 242 007d 53000000 		.4byte	0x53
+ 243 0081 64000000 		.4byte	.LFB3
+ 244 0085 88000000 		.4byte	.LFE3
+ 245 0089 00000000 		.4byte	.LLST1
+ 246 008d 07       		.uleb128 0x7
+ 247 008e 22000000 		.4byte	.LASF12
+ 248 0092 01       		.byte	0x1
+ 249 0093 1C       		.byte	0x1c
+ 250 0094 33000000 		.4byte	0x33
+ 251 0098 01       		.byte	0x1
+ 252 0099 05       		.byte	0x5
+ 253 009a 03       		.byte	0x3
+ 254 009b 00000000 		.4byte	timer
+ 255 009f 00       		.byte	0x0
+ 256              		.section	.debug_abbrev
+ 257 0000 01       		.uleb128 0x1
+ 258 0001 11       		.uleb128 0x11
+ 259 0002 01       		.byte	0x1
+ 260 0003 10       		.uleb128 0x10
+ 261 0004 06       		.uleb128 0x6
+ 262 0005 12       		.uleb128 0x12
+ 263 0006 01       		.uleb128 0x1
+ 264 0007 11       		.uleb128 0x11
+ 265 0008 01       		.uleb128 0x1
+ 266 0009 25       		.uleb128 0x25
+ 267 000a 0E       		.uleb128 0xe
+ 268 000b 13       		.uleb128 0x13
+ 269 000c 0B       		.uleb128 0xb
+ 270 000d 03       		.uleb128 0x3
+ 271 000e 0E       		.uleb128 0xe
+ 272 000f 1B       		.uleb128 0x1b
+ 273 0010 0E       		.uleb128 0xe
+ 274 0011 00       		.byte	0x0
+ 275 0012 00       		.byte	0x0
+ 276 0013 02       		.uleb128 0x2
+ 277 0014 24       		.uleb128 0x24
+ 278 0015 00       		.byte	0x0
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 7
+
+
+ 279 0016 03       		.uleb128 0x3
+ 280 0017 0E       		.uleb128 0xe
+ 281 0018 0B       		.uleb128 0xb
+ 282 0019 0B       		.uleb128 0xb
+ 283 001a 3E       		.uleb128 0x3e
+ 284 001b 0B       		.uleb128 0xb
+ 285 001c 00       		.byte	0x0
+ 286 001d 00       		.byte	0x0
+ 287 001e 03       		.uleb128 0x3
+ 288 001f 16       		.uleb128 0x16
+ 289 0020 00       		.byte	0x0
+ 290 0021 03       		.uleb128 0x3
+ 291 0022 0E       		.uleb128 0xe
+ 292 0023 3A       		.uleb128 0x3a
+ 293 0024 0B       		.uleb128 0xb
+ 294 0025 3B       		.uleb128 0x3b
+ 295 0026 0B       		.uleb128 0xb
+ 296 0027 49       		.uleb128 0x49
+ 297 0028 13       		.uleb128 0x13
+ 298 0029 00       		.byte	0x0
+ 299 002a 00       		.byte	0x0
+ 300 002b 04       		.uleb128 0x4
+ 301 002c 24       		.uleb128 0x24
+ 302 002d 00       		.byte	0x0
+ 303 002e 03       		.uleb128 0x3
+ 304 002f 08       		.uleb128 0x8
+ 305 0030 0B       		.uleb128 0xb
+ 306 0031 0B       		.uleb128 0xb
+ 307 0032 3E       		.uleb128 0x3e
+ 308 0033 0B       		.uleb128 0xb
+ 309 0034 00       		.byte	0x0
+ 310 0035 00       		.byte	0x0
+ 311 0036 05       		.uleb128 0x5
+ 312 0037 2E       		.uleb128 0x2e
+ 313 0038 00       		.byte	0x0
+ 314 0039 3F       		.uleb128 0x3f
+ 315 003a 0C       		.uleb128 0xc
+ 316 003b 03       		.uleb128 0x3
+ 317 003c 0E       		.uleb128 0xe
+ 318 003d 3A       		.uleb128 0x3a
+ 319 003e 0B       		.uleb128 0xb
+ 320 003f 3B       		.uleb128 0x3b
+ 321 0040 0B       		.uleb128 0xb
+ 322 0041 27       		.uleb128 0x27
+ 323 0042 0C       		.uleb128 0xc
+ 324 0043 11       		.uleb128 0x11
+ 325 0044 01       		.uleb128 0x1
+ 326 0045 12       		.uleb128 0x12
+ 327 0046 01       		.uleb128 0x1
+ 328 0047 40       		.uleb128 0x40
+ 329 0048 0A       		.uleb128 0xa
+ 330 0049 00       		.byte	0x0
+ 331 004a 00       		.byte	0x0
+ 332 004b 06       		.uleb128 0x6
+ 333 004c 2E       		.uleb128 0x2e
+ 334 004d 00       		.byte	0x0
+ 335 004e 3F       		.uleb128 0x3f
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 8
+
+
+ 336 004f 0C       		.uleb128 0xc
+ 337 0050 03       		.uleb128 0x3
+ 338 0051 0E       		.uleb128 0xe
+ 339 0052 3A       		.uleb128 0x3a
+ 340 0053 0B       		.uleb128 0xb
+ 341 0054 3B       		.uleb128 0x3b
+ 342 0055 0B       		.uleb128 0xb
+ 343 0056 27       		.uleb128 0x27
+ 344 0057 0C       		.uleb128 0xc
+ 345 0058 49       		.uleb128 0x49
+ 346 0059 13       		.uleb128 0x13
+ 347 005a 11       		.uleb128 0x11
+ 348 005b 01       		.uleb128 0x1
+ 349 005c 12       		.uleb128 0x12
+ 350 005d 01       		.uleb128 0x1
+ 351 005e 40       		.uleb128 0x40
+ 352 005f 06       		.uleb128 0x6
+ 353 0060 00       		.byte	0x0
+ 354 0061 00       		.byte	0x0
+ 355 0062 07       		.uleb128 0x7
+ 356 0063 34       		.uleb128 0x34
+ 357 0064 00       		.byte	0x0
+ 358 0065 03       		.uleb128 0x3
+ 359 0066 0E       		.uleb128 0xe
+ 360 0067 3A       		.uleb128 0x3a
+ 361 0068 0B       		.uleb128 0xb
+ 362 0069 3B       		.uleb128 0x3b
+ 363 006a 0B       		.uleb128 0xb
+ 364 006b 49       		.uleb128 0x49
+ 365 006c 13       		.uleb128 0x13
+ 366 006d 3F       		.uleb128 0x3f
+ 367 006e 0C       		.uleb128 0xc
+ 368 006f 02       		.uleb128 0x2
+ 369 0070 0A       		.uleb128 0xa
+ 370 0071 00       		.byte	0x0
+ 371 0072 00       		.byte	0x0
+ 372 0073 00       		.byte	0x0
+ 373              		.section	.debug_pubnames,"",%progbits
+ 374 0000 38000000 		.4byte	0x38
+ 375 0004 0200     		.2byte	0x2
+ 376 0006 00000000 		.4byte	.Ldebug_info0
+ 377 000a A0000000 		.4byte	0xa0
+ 378 000e 61000000 		.4byte	0x61
+ 379 0012 73746172 		.ascii	"startTimer1\000"
+ 379      7454696D 
+ 379      65723100 
+ 380 001e 74000000 		.4byte	0x74
+ 381 0022 67657453 		.ascii	"getSomeTime\000"
+ 381      6F6D6554 
+ 381      696D6500 
+ 382 002e 8D000000 		.4byte	0x8d
+ 383 0032 74696D65 		.ascii	"timer\000"
+ 383      7200
+ 384 0038 00000000 		.4byte	0x0
+ 385              		.section	.debug_aranges,"",%progbits
+ 386 0000 1C000000 		.4byte	0x1c
+ 387 0004 0200     		.2byte	0x2
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 9
+
+
+ 388 0006 00000000 		.4byte	.Ldebug_info0
+ 389 000a 04       		.byte	0x4
+ 390 000b 00       		.byte	0x0
+ 391 000c 0000     		.2byte	0x0
+ 392 000e 0000     		.2byte	0x0
+ 393 0010 00000000 		.4byte	.Ltext0
+ 394 0014 88000000 		.4byte	.Letext0-.Ltext0
+ 395 0018 00000000 		.4byte	0x0
+ 396 001c 00000000 		.4byte	0x0
+ 397              		.section	.debug_str,"MS",%progbits,1
+ 398              	.LASF7:
+ 399 0000 67657453 		.ascii	"getSomeTime\000"
+ 399      6F6D6554 
+ 399      696D6500 
+ 400              	.LASF9:
+ 401 000c 74696D65 		.ascii	"timer.c\000"
+ 401      722E6300 
+ 402              	.LASF0:
+ 403 0014 756E7369 		.ascii	"unsigned char\000"
+ 403      676E6564 
+ 403      20636861 
+ 403      7200
+ 404              	.LASF12:
+ 405 0022 74696D65 		.ascii	"timer\000"
+ 405      7200
+ 406              	.LASF5:
+ 407 0028 6C6F6E67 		.ascii	"long unsigned int\000"
+ 407      20756E73 
+ 407      69676E65 
+ 407      6420696E 
+ 407      7400
+ 408              	.LASF1:
+ 409 003a 73686F72 		.ascii	"short unsigned int\000"
+ 409      7420756E 
+ 409      7369676E 
+ 409      65642069 
+ 409      6E7400
+ 410              	.LASF2:
+ 411 004d 756E7369 		.ascii	"unsigned int\000"
+ 411      676E6564 
+ 411      20696E74 
+ 411      00
+ 412              	.LASF10:
+ 413 005a 2F637967 		.ascii	"/cygdrive/c/Users/embedded/Desktop/finalo_lpc2148_v"
+ 413      64726976 
+ 413      652F632F 
+ 413      55736572 
+ 413      732F656D 
+ 414 008d 332F7265 		.ascii	"3/reflexgame\000"
+ 414      666C6578 
+ 414      67616D65 
+ 414      00
+ 415              	.LASF8:
+ 416 009a 474E5520 		.ascii	"GNU C 4.1.1\000"
+ 416      4320342E 
+ 416      312E3100 
+ 417              	.LASF11:
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 10
+
+
+ 418 00a6 74553332 		.ascii	"tU32\000"
+ 418      00
+ 419              	.LASF4:
+ 420 00ab 73686F72 		.ascii	"short int\000"
+ 420      7420696E 
+ 420      7400
+ 421              	.LASF6:
+ 422 00b5 73746172 		.ascii	"startTimer1\000"
+ 422      7454696D 
+ 422      65723100 
+ 423              	.LASF3:
+ 424 00c1 7369676E 		.ascii	"signed char\000"
+ 424      65642063 
+ 424      68617200 
+ 425              		.ident	"GCC: (GNU) 4.1.1"
+ARM GAS  /cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s 			page 11
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 timer.c
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:1      .text:00000000 $t
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:16     .text:00000000 startTimer1
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:72     .text:00000044 $d
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:87     .text:00000064 getSomeTime
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:84     .text:00000064 $t
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:116    .text:00000084 $d
+/cygdrive/c/Users/embedded/AppData/Local/Temp/ccal2YOY.s:124    .bss:00000000 timer
+
+UNDEFINED SYMBOLS
+ledMatrix
+getAnyButton
+osSleep
