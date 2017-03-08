@@ -1,0 +1,2 @@
+# embeddedSystems
+[PL] Systemy wbudowane
